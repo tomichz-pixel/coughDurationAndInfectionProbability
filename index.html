@@ -1,1 +1,312 @@
-<p> hello
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>咳嗽分類神経衰弱 - 咳の診方【2026年版】</title>
+</head>
+<body style="margin:0; padding:10px; background:#fafafa; color:#333; font-family:sans-serif; display:flex; justify-content:center; align-items:center; min-height:100vh;">
+
+<div id="cough-game" style="width:100%; max-width:600px; background:#ffffff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.15); overflow:hidden; border: 1px solid #ddd;">
+
+<style>
+#cough-game * { box-sizing:border-box; user-select:none; }
+#cough-game .header {
+    height:48px; background:#263238; color:#fff;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:0 15px; font-size:15px; font-weight:bold;
+}
+#cough-game .board {
+    display:flex; flex-direction:column; background: #fafafa;
+    padding: 12px; gap: 10px;
+}
+#cough-game .area-wrapper {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 8px 10px 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+#cough-game .layer-label {
+    font-size: 12px; color: #555; font-weight: bold;
+    text-align: center; margin-bottom: 6px;
+}
+#cough-game .area {
+    display:grid; grid-template-columns:repeat(3, 1fr);
+    gap:8px;
+}
+#cough-game .card { width:100%; cursor:pointer; }
+#cough-game .card-inner-wrapper {
+    position:relative; width:100%; padding-bottom:60%;
+}
+#cough-game .inner {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    transform-style:preserve-3d; transition:transform 0.3s cubic-bezier(0.4, 0.2, 0.2, 1); border-radius:6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+#cough-game .flipped .inner { transform:rotateY(180deg); }
+#cough-game .front, #cough-game .back {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    text-align:center; padding:4px; backface-visibility:hidden;
+    -webkit-backface-visibility:hidden; border-radius:6px;
+    font-weight:bold;
+}
+
+/* 層ごとの表面（?）のカラー設定 */
+#cough-game .layer-0 .front { background:#e8f5e9; color:#2e7d32; border: 1.5px solid #a5d6a7; }
+#cough-game .layer-1 .front { background:#e3f2fd; color:#1565c0; border: 1.5px solid #90caf9; }
+#cough-game .layer-2 .front { background:#fff3e0; color:#e65100; border: 1.5px solid #ffcc80; }
+
+#cough-game .front:hover {
+    filter: brightness(0.95);
+}
+
+#cough-game .back {
+    background:#ffffff; transform:rotateY(180deg);
+    writing-mode: horizontal-tb;
+    font-size: 13px; line-height: 1.3;
+    color: #333;
+    border: 1.5px solid #ddd;
+}
+#cough-game .layer-0 .back { border-bottom: 4px solid #4caf50; }
+#cough-game .layer-1 .back { border-bottom: 4px solid #2196f3; }
+#cough-game .layer-2 .back { border-bottom: 4px solid #ff9800; }
+
+#cough-game .matched { opacity:0; transform:scale(0); transition:0.4s; pointer-events:none; }
+
+#cough-game .modal {
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,0.6); justify-content:center; align-items:center; z-index: 1000;
+}
+#cough-game .modal-content {
+    background:#ffffff; color:#333; padding:20px; border-radius:10px;
+    width:90%; max-width:400px; max-height: 80vh; overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    border: 1px solid #ccc;
+}
+#cough-game .analysis {
+    background: #f9f9f9; padding: 12px; border-radius: 6px;
+    font-size: 13px; margin: 12px 0; border-left: 4px solid #f44336;
+    line-height: 1.4;
+}
+#cough-game .analysis-correct {
+    border-left-color: #4caf50;
+    background: #e8f5e9;
+}
+#cough-game button {
+    width:100%; padding:10px; background:#2196f3; color:white;
+    border:none; border-radius:6px; font-size:15px; cursor: pointer;
+    font-weight: bold; transition: background 0.2s;
+}
+#cough-game button:hover {
+    background:#1e88e5;
+}
+</style>
+
+<div class="header">
+    <div style="display:flex; align-items:center; gap:6px;">
+        咳嗽分類神経衰弱
+    </div>
+    <div style="font-size: 13px;">
+        ミス: <span id="cough-m">0</span> 回
+    </div>
+</div>
+<div class="board" id="cough-board"></div>
+<div class="modal" id="cough-modal">
+    <div class="modal-content">
+        <h3 id="cough-mt" style="margin-top:0; font-size:18px;"></h3>
+        <div id="cough-txt" style="font-size:14px; line-height:1.4; margin-bottom: 10px;"></div>
+        <div id="cough-analysis" class="analysis"></div>
+        <button id="cough-btn">次へ</button>
+    </div>
+</div>
+
+<!-- 外部データファイルの読み込み -->
+<script src="data.js"></script>
+
+<script>
+(function(){
+    // 咳嗽データが正常に読み込まれているか確認
+    const gameData = typeof coughData !== 'undefined' ? coughData : {
+        "急性咳嗽": { 分類: "急性咳嗽", 期間: "<3週", 感染: "高い", note: "急性咳嗽は3週間未満。風邪等の急性上気道感染症が大部分です。" },
+        "遷延性咳嗽": { 分類: "遷延性咳嗽", 期間: "3-7週", 感染: "中くらい", note: "遷延性咳嗽は3〜8週未満。感染後咳嗽が代表的です。" },
+        "慢性咳嗽": { 分類: "慢性咳嗽", 期間: ">=8週", 感染: "低い", note: "慢性咳嗽は8週以上。咳喘息等の非感染性疾患が疑われます。" }
+    };
+
+    const coughNames = Object.keys(gameData);
+    const layers = ["分類", "期間", "感染"];
+
+    let selections = [null, null, null];
+    let lock = false, miss = 0;
+    let matchedGroups = new Set();
+
+    const board  = document.getElementById('cough-board');
+    const modal  = document.getElementById('cough-modal');
+    const mt     = document.getElementById('cough-mt');
+    const txt    = document.getElementById('cough-txt');
+    const analysis = document.getElementById('cough-analysis');
+    const btn    = document.getElementById('cough-btn');
+
+    function shuffle(a){ return a.sort(()=>Math.random()-0.5); }
+
+    function getValidGroups(type, value) {
+        return coughNames.filter(name => {
+            const data = gameData[name];
+            if (type === "分類") return data.分類 === value;
+            if (type === "期間") return data.期間 === value;
+            if (type === "感染") return data.感染 === value;
+            return false;
+        });
+    }
+
+    function createCard(val, type, layerIdx) {
+        const c = document.createElement('div');
+        c.className = 'card';
+        c.dataset.val = val;
+        c.dataset.type = type;
+
+        c.innerHTML = `
+            <div class="card-inner-wrapper">
+                <div class="inner">
+                    <div class="front">?</div>
+                    <div class="back"><span class="back-text">${val}</span></div>
+                </div>
+            </div>`;
+
+        c.onclick = () => {
+            if (lock || c.classList.contains('matched')) return;
+            
+            // すでに選択されているこのカードをもう一度タップした場合は裏返してキャンセル
+            if (selections[layerIdx] && selections[layerIdx].el === c) {
+                c.classList.remove('flipped');
+                selections[layerIdx] = null;
+                return;
+            }
+            
+            // 同じレイヤーで既に選択されている他のカードがあれば戻す
+            if (selections[layerIdx]) {
+                selections[layerIdx].el.classList.remove('flipped');
+            }
+            c.classList.add('flipped');
+            selections[layerIdx] = { el: c, val, type };
+            
+            // 3つの層すべてからカードがめくられたか判定
+            if (selections.every(s => s !== null)) {
+                lock = true;
+                setTimeout(checkMatch, 600);
+            }
+        };
+        return c;
+    }
+
+    function checkMatch() {
+        let candidates = [...coughNames];
+        selections.forEach(s => {
+            const valid = getValidGroups(s.type, s.val);
+            candidates = candidates.filter(name => valid.includes(name));
+        });
+
+        const freshCandidates = candidates.filter(name => !matchedGroups.has(name));
+
+        if (freshCandidates.length > 0) {
+            const groupName = freshCandidates[0];
+            matchedGroups.add(groupName);
+            const res = gameData[groupName];
+            
+            analysis.className = "analysis analysis-correct";
+            showModal(
+                "正解！",
+                `<b>【${groupName}】</b>の正しい組み合わせです。`,
+                `📝 <b>解説:</b><br>${res.note}`,
+                true
+            );
+        } else {
+            miss++;
+            document.getElementById('cough-m').textContent = miss;
+
+            let diffHtml = "";
+            const catSel = selections.find(s => s.type === "分類");
+            if (catSel) {
+                const target = catSel.val;
+                const correct = gameData[target];
+                diffHtml += `💡 <b>【${target}】</b>の正しい組み合わせ：<br><br>`;
+                selections.forEach(s => {
+                    if (s.type === "分類") return;
+                    const isOk = getValidGroups(s.type, s.val).includes(target);
+                    diffHtml += `・<b>${s.type}</b>: ${isOk ? '<span style="color:#4caf50;">○</span> '+s.val : '<span style="color:#f44336;">×</span> '+s.val} (正しくは <b>${correct[s.type]}</b>)<br>`;
+                });
+            } else {
+                diffHtml += "分類と期間、感染の可能性が一致しません。<br>「持続期間と感染症の可能性は逆相関」の関係にあります。";
+            }
+
+            analysis.className = "analysis";
+            showModal("残念...", "正しい組み合わせではありませんでした。", diffHtml, false);
+        }
+    }
+
+    function showModal(title, message, analysisText, isSuccess) {
+        mt.textContent = title;
+        mt.style.color = isSuccess ? "#2e7d32" : "#d32f2f";
+        txt.innerHTML = message;
+        analysis.innerHTML = analysisText;
+        analysis.style.display = analysisText ? "block" : "none";
+        modal.style.display = 'flex';
+
+        btn.onclick = () => {
+            modal.style.display = 'none';
+            if (isSuccess) {
+                selections.forEach(s => s.el.classList.add('matched'));
+                if (matchedGroups.size === coughNames.length) {
+                    setTimeout(() => { 
+                        alert("コンプリート！お疲れ様でした！"); 
+                        init(); 
+                    }, 500);
+                }
+            } else {
+                selections.forEach(s => s.el.classList.remove('flipped'));
+            }
+            selections = [null, null, null];
+            lock = false;
+        };
+    }
+
+    function init() {
+        board.innerHTML = '';
+        miss = 0;
+        matchedGroups = new Set();
+        document.getElementById('cough-m').textContent = 0;
+        selections = [null, null, null];
+
+        layers.forEach((type, i) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'area-wrapper';
+
+            const label = document.createElement('div');
+            label.className = 'layer-label';
+            label.textContent = `層 ${i+1}: ${type === '感染' ? '感染症の可能性' : type}`;
+            wrapper.appendChild(label);
+
+            const area = document.createElement('div');
+            area.className = `area layer-${i}`;
+
+            let vals = [];
+            if (type === "分類") {
+                vals = shuffle([...coughNames]);
+            } else {
+                vals = shuffle(coughNames.map(name => gameData[name][type]));
+            }
+
+            vals.forEach(v => area.appendChild(createCard(v, type, i)));
+            wrapper.appendChild(area);
+            board.appendChild(wrapper);
+        });
+    }
+
+    init();
+})();
+</script>
+</div>
+
+</body>
+</html>
+
