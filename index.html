@@ -101,14 +101,38 @@
 #cough-game button:hover {
     background:#1e88e5;
 }
+#cough-game .full-open-btn {
+    width: auto;
+    padding: 4px 10px;
+    background: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+#cough-game .full-open-btn:hover {
+    background: #e65100;
+}
+#cough-game .full-open-btn:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    box-shadow: none;
+}
 </style>
 
-<div class="header">
+<div class="header" style="height: auto; min-height: 48px; padding: 6px 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
     <div style="display:flex; align-items:center; gap:6px;">
         咳嗽分類神経衰弱
     </div>
-    <div style="font-size: 13px;">
-        ミス: <span id="cough-m">0</span> 回
+    <div style="display:flex; align-items:center; gap:10px;">
+        <button class="full-open-btn" id="full-open-btn">フルオープン（5秒）</button>
+        <div style="font-size: 13px; white-space: nowrap;">
+            ミス: <span id="cough-m">0</span> 回
+        </div>
     </div>
 </div>
 <div class="board" id="cough-board"></div>
@@ -277,6 +301,12 @@
         document.getElementById('cough-m').textContent = 0;
         selections = [null, null, null];
 
+        const fullOpenBtn = document.getElementById('full-open-btn');
+        if (fullOpenBtn) {
+            fullOpenBtn.disabled = false;
+            fullOpenBtn.textContent = 'フルオープン（5秒）';
+        }
+
         layers.forEach((type, i) => {
             const wrapper = document.createElement('div');
             wrapper.className = 'area-wrapper';
@@ -300,6 +330,48 @@
             wrapper.appendChild(area);
             board.appendChild(wrapper);
         });
+    }
+
+    // --- フルオープン（5秒）処理 ---
+    const fullOpenBtn = document.getElementById('full-open-btn');
+    if (fullOpenBtn) {
+        fullOpenBtn.onclick = () => {
+            fullOpenBtn.disabled = true;
+            const activeCards = board.querySelectorAll('.card:not(.matched)');
+            const originalStates = [];
+            
+            activeCards.forEach(card => {
+                originalStates.push({
+                    el: card,
+                    wasFlipped: card.classList.contains('flipped')
+                });
+                card.classList.add('flipped');
+            });
+
+            board.style.pointerEvents = 'none';
+
+            let timeLeft = 5;
+            fullOpenBtn.textContent = `オープン中... (${timeLeft})`;
+
+            const timer = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    fullOpenBtn.textContent = `オープン中... (${timeLeft})`;
+                } else {
+                    clearInterval(timer);
+                    
+                    originalStates.forEach(state => {
+                        if (!state.wasFlipped) {
+                            state.el.classList.remove('flipped');
+                        }
+                    });
+
+                    board.style.pointerEvents = 'auto';
+                    fullOpenBtn.disabled = false;
+                    fullOpenBtn.textContent = 'フルオープン（5秒）';
+                }
+            }, 1000);
+        };
     }
 
     init();
